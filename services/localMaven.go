@@ -1,9 +1,9 @@
 package services
 
 import (
+	"ezoneMavenUpload/utils/logger"
 	"fmt"
 	"io/fs"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -25,7 +25,7 @@ type MavenInfoPath struct {
 func FindMavenRepos(repoPath string) (mip []MavenInfoPath, err error) {
 	// 将地址转为绝对路径
 	if repoPath, err = filepath.Abs(repoPath); err != nil {
-		slog.Error(fmt.Sprintf("无法转化地址: %s; 错误: %s", repoPath, err))
+		logger.Logger.Error(fmt.Sprintf("无法转化地址: %s; 错误: %s", repoPath, err))
 		return
 	}
 	var wg sync.WaitGroup
@@ -60,7 +60,7 @@ func parsePkg(basePath, pkgPath string) *MavenInfoPath {
 		if _, err := os.Stat(path); err == nil {
 			pkgPL := strings.Split(pkgPath, string(filepath.Separator))
 			if len(pkgPL) < 3 {
-				slog.Warn(fmt.Sprintf("不是标准的仓库文件: %s", path))
+				logger.Logger.Warn(fmt.Sprintf("不是标准的仓库文件: %s", path))
 				return nil
 			}
 			return &MavenInfoPath{

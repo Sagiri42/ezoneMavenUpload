@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"ezoneMavenUpload/utils/logger"
 	"fmt"
 	"go/types"
 	"io"
-	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -56,9 +56,9 @@ type EzCreatePackage struct {
 
 // NewEzOne 创建EzOne服务
 func NewEzOne(ezBaseurl, ezToken, ezRepoId string, options ...EzOneOption) (e EzOne, err error) {
-	slog.Debug("开始创建EzOne结构体")
+	logger.Logger.Debug("开始创建EzOne结构体")
 	if e.BaseUrl, err = url.Parse(ezBaseurl); err != nil {
-		slog.Error(fmt.Sprint("url格式错误:", e.BaseUrl))
+		logger.Logger.Error(fmt.Sprint("url格式错误:", e.BaseUrl))
 		return
 	}
 	e.Token = ezToken
@@ -68,7 +68,7 @@ func NewEzOne(ezBaseurl, ezToken, ezRepoId string, options ...EzOneOption) (e Ez
 		options[i](&e)
 	}
 	if err = e.QueryRepository(); err != nil {
-		slog.Error(fmt.Sprint("不存在制品库:", e.RepoId))
+		logger.Logger.Error(fmt.Sprint("不存在制品库:", e.RepoId))
 	}
 	return
 }
@@ -83,14 +83,14 @@ func (e EzOne) splicingBaseUrl(apiUrl string, params map[string]string) string {
 
 	if urls := strings.Split(apiUrl, "/"); e.Enterprise != "" && len(urls) >= 2 {
 		apiUrl = strings.Join(append([]string{urls[1], e.Enterprise}, urls[2:]...), "/")
-		slog.Debug(fmt.Sprint("已启用多组织, 添加组织至接口:", apiUrl))
+		logger.Logger.Debug(fmt.Sprint("已启用多组织, 添加组织至接口:", apiUrl))
 	}
 
 	apiPath, _ := url.Parse(apiUrl)
 	fullPath := e.BaseUrl.ResolveReference(apiPath)
 	fullPath.RawQuery = queryParams.Encode()
 
-	slog.Debug(fmt.Sprint("已拼接url:", fullPath.String()))
+	logger.Logger.Debug(fmt.Sprint("已拼接url:", fullPath.String()))
 	return fullPath.String()
 }
 
@@ -99,7 +99,7 @@ func (e EzOne) QueryRepository() (err error) {
 	apiUrl := e.splicingBaseUrl("/v1/package/api/repository/simpleInfo", map[string]string{
 		"repoId": e.RepoId,
 	})
-	slog.Debug(fmt.Sprint("查询制品库是否存在:", apiUrl))
+	logger.Logger.Debug(fmt.Sprint("查询制品库是否存在:", apiUrl))
 
 	var response *http.Response
 	if response, err = http.Get(apiUrl); err != nil {
@@ -119,7 +119,7 @@ func (e EzOne) QueryRepository() (err error) {
 	if bodyData.Code != 0 {
 		return errors.New(bodyData.Message)
 	}
-	slog.Info(fmt.Sprint("制品库存在, 当前制品库名:", bodyData.Data.RepoName))
+	logger.Logger.Info(fmt.Sprint("制品库存在, 当前制品库名:", bodyData.Data.RepoName))
 	return
 }
 
@@ -130,7 +130,7 @@ func (e EzOne) QueryPackage(pkgName string) (pkgId string, err error) {
 		"pkgName":  pkgName,
 		"pageSize": "0",
 	})
-	slog.Debug("查询制品包是否存在:", apiUrl)
+	logger.Logger.Debug("查询制品包是否存在:", apiUrl)
 
 	var response *http.Response
 	if response, err = http.Get(apiUrl); err != nil {
@@ -164,7 +164,7 @@ func (e EzOne) QueryVersion(pkgId, version string) (isExist bool, err error) {
 		"version": version,
 		"format":  "maven",
 	})
-	slog.Debug(fmt.Sprint("查询制品库版本是否存在:", apiUrl))
+	logger.Logger.Debug(fmt.Sprint("查询制品库版本是否存在:", apiUrl))
 
 	var response *http.Response
 	if response, err = http.Get(apiUrl); err != nil {
@@ -190,7 +190,7 @@ func (e EzOne) QueryVersion(pkgId, version string) (isExist bool, err error) {
 // CreatePackage 新建制品包
 func (e EzOne) CreatePackage(groupName, pkgName string) (packageId string, err error) {
 	apiUrl := e.splicingBaseUrl("/v1/package/api/package", nil)
-	slog.Debug(fmt.Sprint("创建制品包:", apiUrl))
+	logger.Logger.Debug(fmt.Sprint("创建制品包:", apiUrl))
 
 	var requestBody []byte
 	if requestBody, err = json.Marshal(EzCreatePackage{
@@ -225,7 +225,7 @@ func (e EzOne) CreatePackage(groupName, pkgName string) (packageId string, err e
 // UploadPackage 上传制品到指定的制品包版本
 func (e EzOne) UploadPackage(pkgId, version, filePath string) (err error) {
 	apiUrl := e.splicingBaseUrl("/v1/package/api/artifact/upload", map[string]string{})
-	slog.Debug(fmt.Sprint("上传制品包版本:", apiUrl))
+	logger.Logger.Debug(fmt.Sprint("上传制品包版本:", apiUrl))
 
 	var fileOpen *os.File
 	if fileOpen, err = os.Open(filePath); err != nil {
@@ -276,19 +276,19 @@ func (e EzOne) UploadPkgToRepo(groupId, artifactId, version, path string) {
 	var pkgId string
 	pkgName := fmt.Sprintf("%s:%s", groupId, artifactId)
 	if pkgId, err = e.QueryPackage(pkgName); err != nil {
-		slog.Error(fmt.Sprintf("制品包 %s 查询失败:", pkgName), err)
+		logger.Logger.Error(fmt.Sprintf("制品包 %s 查询失败:", pkgName), err)
 		return
 	} else if pkgId == "" {
 		if pkgId, err = e.CreatePackage(groupId, artifactId); err != nil || pkgId == "" {
-			slog.Error(fmt.Sprintf("制品包 %s 创建失败:", pkgName), err)
+			logger.Logger.Error(fmt.Sprintf("制品包 %s 创建失败:", pkgName), err)
 			return
 		}
-		slog.Info(fmt.Sprintf("已创建制品包: %s; 制品包ID: %s", pkgName, pkgId))
+		logger.Logger.Info(fmt.Sprintf("已创建制品包: %s; 制品包ID: %s", pkgName, pkgId))
 	}
-	slog.Info(fmt.Sprintf("已存在制品包: %s; 制品ID: %s", pkgName, pkgId))
+	logger.Logger.Info(fmt.Sprintf("已存在制品包: %s; 制品ID: %s", pkgName, pkgId))
 	if err = e.UploadPackage(pkgId, version, path); err != nil {
-		slog.Error(fmt.Sprintf("上传制品 %s 版本 %s 创建失败; 错误: %s", pkgName, version, err))
+		logger.Logger.Error(fmt.Sprintf("上传制品 %s 版本 %s 创建失败; 错误: %s", pkgName, version, err))
 	} else {
-		slog.Info(fmt.Sprintf("已上传制品: %s; 版本: %s", pkgName, version))
+		logger.Logger.Info(fmt.Sprintf("已上传制品: %s; 版本: %s", pkgName, version))
 	}
 }
