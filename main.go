@@ -4,6 +4,7 @@ import (
 	"ezoneMavenUpload/cmd"
 	"ezoneMavenUpload/services"
 	"fmt"
+	"github.com/cheggaaa/pb/v3"
 	"log/slog"
 	"sync"
 )
@@ -33,6 +34,7 @@ func main() {
 	fmt.Println("开始上传本地maven仓库依赖")
 	var wg sync.WaitGroup
 	ch := make(chan struct{}, cmd.WorksNum)
+	bar := pb.StartNew(len(mip))
 	for i := range mip {
 		wg.Add(1)
 		ch <- struct{}{}
@@ -40,9 +42,11 @@ func main() {
 			ezOne.UploadPkgToRepo(mip.GroupId, mip.ArtifactId, mip.Version, mip.Path)
 			<-ch
 			wg.Done()
+			bar.Increment()
 		}(mip[i])
 	}
 	wg.Wait()
 	close(ch)
+	bar.Finish()
 	fmt.Println("完成本地maven仓库上传!")
 }
